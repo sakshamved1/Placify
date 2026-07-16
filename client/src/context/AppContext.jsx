@@ -1,6 +1,9 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import io from 'socket.io-client';
 
+
+const API_URL = import.meta.env.VITE_API_URL;
+
 const AppContext = createContext();
 
 export const useApp = () => useContext(AppContext);
@@ -36,7 +39,7 @@ export const AppProvider = ({ children }) => {
       headers['Content-Type'] = 'application/json';
     }
 
-    const res = await fetch(url, {
+    const res = await fetch(`${API_URL}${url}`, {
       ...options,
       headers,
     });
@@ -53,7 +56,7 @@ export const AppProvider = ({ children }) => {
   const fetchUser = async (authToken) => {
     try {
       setLoading(true);
-      const data = await fetch('/api/auth/me', {
+      const data = await fetch(`${API_URL}/api/auth/me`, {
         headers: {
           'Authorization': `Bearer ${authToken}`,
         },
@@ -367,7 +370,7 @@ export const AppProvider = ({ children }) => {
       fetchNotifications();
 
       // Establish Real-Time Socket Connection
-      const newSocket = io({
+      const newSocket = io(API_URL, {
         transports: ['websocket', 'polling']
       });
 
