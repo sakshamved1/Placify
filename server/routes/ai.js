@@ -189,10 +189,19 @@ router.post('/interview-prep', protect, async (req, res) => {
 
   try {
     const user = await User.findById(req.user._id);
-    const job = await Job.findById(jobId);
+    let job = await Job.findById(jobId);
 
-    if (!user || !job) {
-      return res.status(404).json({ message: 'User or Job profile not found' });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (!job) {
+      job = {
+        title: 'Software Developer',
+        company: 'Corporate Partner',
+        description: 'Software development, API creation, database management, and full-stack engineering.',
+        skills: ['JavaScript', 'Software Engineering']
+      };
     }
 
     const skills = user.profile?.skills || [];

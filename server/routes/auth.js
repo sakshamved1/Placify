@@ -74,6 +74,22 @@ const generateToken = (id) => {
 router.post('/register', async (req, res) => {
   const { name, email, password, role } = req.body;
 
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email || !emailRegex.test(email)) {
+    return res.status(400).json({ message: 'Invalid email address format (e.g. name@domain.com)' });
+  }
+
+  // Validate password strength
+  if (!password || password.length < 8) {
+    return res.status(400).json({ message: 'Password must be at least 8 characters long' });
+  }
+  const hasNum = /\d/.test(password);
+  const hasSpecial = /[!@#$%^&*(),.?":{}|<>_]/.test(password);
+  if (!hasNum || !hasSpecial) {
+    return res.status(400).json({ message: 'Password must contain at least one number and one special character' });
+  }
+
   try {
     const userExists = await User.findOne({ email });
 

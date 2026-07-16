@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles, ArrowRight, ShieldCheck, Zap, Activity, BarChart, Send, Briefcase, FileText } from 'lucide-react';
+import { Sparkles, ArrowRight, ShieldCheck, Zap, Activity, BarChart, Send, Briefcase, FileText, X } from 'lucide-react';
 
 const LandingPage = () => {
+  const [showTour, setShowTour] = useState(false);
+  const [tourTab, setTourTab] = useState('student');
+
   const stats = [
     { label: 'Students Placed', value: '450+', sub: 'Last academic year' },
     { label: 'Hiring Partners', value: '120+', sub: 'Global corporations' },
@@ -67,12 +70,12 @@ const LandingPage = () => {
           >
             Get Started <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </Link>
-          <a
-            href="#features"
-            className="w-full sm:w-auto px-8 py-4 rounded-2xl text-base font-semibold bg-white/5 text-slate-200 border border-white/10 hover:bg-white/10 hover:text-white transition-all flex items-center justify-center"
+          <button
+            onClick={() => setShowTour(true)}
+            className="w-full sm:w-auto px-8 py-4 rounded-2xl text-base font-semibold bg-white/5 text-slate-200 border border-white/10 hover:bg-white/10 hover:text-white transition-all flex items-center justify-center cursor-pointer"
           >
             Learn More
-          </a>
+          </button>
         </div>
 
         {/* Interactive Dashboard Mockup Preview */}
@@ -240,6 +243,163 @@ const LandingPage = () => {
           </div>
         </div>
       </footer>
+
+      {/* Platform Walkthrough Tour Modal */}
+      {showTour && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-2xl glass-panel border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl relative text-left flex flex-col gap-6">
+            
+            {/* Glow Accent */}
+            <div className="absolute -top-10 -left-10 w-40 h-40 bg-indigo-500/20 rounded-full blur-2xl pointer-events-none" />
+
+            {/* Close Button */}
+            <button 
+              onClick={() => setShowTour(false)}
+              className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Header */}
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-bold text-indigo-400 uppercase mb-2">
+                <Sparkles className="w-3.5 h-3.5" /> Interactive Tour
+              </div>
+              <h3 className="font-heading text-2xl font-bold text-white">Explore Placify Core Features</h3>
+              <p className="text-xs text-slate-400 font-light mt-1">
+                Learn how Placify streamlines placements for students, recruiters, and admins.
+              </p>
+            </div>
+
+            {/* Tab Links */}
+            <div className="flex gap-2 border-b border-white/5 pb-3 overflow-x-auto">
+              {[
+                { id: 'student', label: 'Student Experience', icon: FileText },
+                { id: 'recruiter', label: 'Recruiter Dashboard', icon: Briefcase },
+                { id: 'admin', label: 'Admin Analytics', icon: BarChart },
+              ].map(tab => {
+                const TabIcon = tab.icon;
+                const isSelected = tourTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setTourTab(tab.id)}
+                    className={`px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border ${
+                      isSelected
+                        ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-300'
+                        : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                    }`}
+                  >
+                    <TabIcon className="w-4 h-4" />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Tab Contents */}
+            <div className="flex-1 min-h-[220px]">
+              {tourTab === 'student' && (
+                <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+                  <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5 flex gap-4">
+                    <div className="p-3 h-fit rounded-xl bg-indigo-500/10 text-indigo-400">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                    <div className="flex flex-col gap-1 text-left">
+                      <h4 className="font-bold text-sm text-white">Google Gemini AI Match Analysis</h4>
+                      <p className="text-xs text-slate-400 font-light leading-relaxed">
+                        Compare your resume and skill vectors directly against real-time Indian IT listings. Instantly see fit metrics, gap analysis, and recommendations.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5 flex gap-4">
+                    <div className="p-3 h-fit rounded-xl bg-emerald-500/10 text-emerald-400">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div className="flex flex-col gap-1 text-left">
+                      <h4 className="font-bold text-sm text-white">Instant ATS Resume Checker</h4>
+                      <p className="text-xs text-slate-400 font-light leading-relaxed">
+                        Upload your PDF resume to receive an automated score check based on keywords, structure alignments, and technical skills matches.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {tourTab === 'recruiter' && (
+                <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+                  <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5 flex gap-4">
+                    <div className="p-3 h-fit rounded-xl bg-indigo-500/10 text-indigo-400">
+                      <Activity className="w-5 h-5" />
+                    </div>
+                    <div className="flex flex-col gap-1 text-left">
+                      <h4 className="font-bold text-sm text-white">WebSockets Application Tracking Kanban</h4>
+                      <p className="text-xs text-slate-400 font-light leading-relaxed">
+                        Manage candidates visually by dragging cards between statuses. Recruiter updates and custom panel notes are broadcast instantly to student views.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5 flex gap-4">
+                    <div className="p-3 h-fit rounded-xl bg-purple-500/10 text-purple-400">
+                      <Send className="w-5 h-5" />
+                    </div>
+                    <div className="flex flex-col gap-1 text-left">
+                      <h4 className="font-bold text-sm text-white">Indian IT Jobs Feed Integration</h4>
+                      <p className="text-xs text-slate-400 font-light leading-relaxed">
+                        Create manual student job placements or sync external positions natively from Adzuna APIs with Lakhs Per Annum (LPA) mapping systems.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {tourTab === 'admin' && (
+                <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+                  <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5 flex gap-4">
+                    <div className="p-3 h-fit rounded-xl bg-indigo-500/10 text-indigo-400">
+                      <BarChart className="w-5 h-5" />
+                    </div>
+                    <div className="flex flex-col gap-1 text-left">
+                      <h4 className="font-bold text-sm text-white">Unified System Placement Metrics</h4>
+                      <p className="text-xs text-slate-400 font-light leading-relaxed">
+                        Track correlation indices between student CGPA grades and offer success rates, average salary packages, and active enrollment ratios across departments.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white/[0.01] border border-white/5 flex gap-4">
+                    <div className="p-3 h-fit rounded-xl bg-emerald-500/10 text-emerald-400">
+                      <ShieldCheck className="w-5 h-5" />
+                    </div>
+                    <div className="flex flex-col gap-1 text-left">
+                      <h4 className="font-bold text-sm text-white">Administrative Portal Settings</h4>
+                      <p className="text-xs text-slate-400 font-light leading-relaxed">
+                        Control student configurations, supervise recruiter verification statuses, and monitor server configurations centrally.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="flex justify-end gap-3 pt-3 border-t border-white/5">
+              <button
+                onClick={() => setShowTour(false)}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-white/5 text-slate-300 border border-white/10 hover:bg-white/10 hover:text-white transition-all"
+              >
+                Close Tour
+              </button>
+              <Link
+                to="/login?register=true"
+                className="px-5 py-2.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-brand-primary to-brand-secondary text-white hover:opacity-90 transition-all flex items-center gap-1.5"
+              >
+                Register & Start <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 };

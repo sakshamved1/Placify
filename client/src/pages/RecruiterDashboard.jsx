@@ -38,13 +38,29 @@ const RecruiterDashboard = () => {
     const skillsArray = skillsText.split(',').map(s => s.trim()).filter(s => s.length > 0);
     const reqsArray = reqsText.split('\n').map(r => r.trim()).filter(r => r.length > 0);
 
+    // Convert Rupee salary input to LPA formatting (100,000 INR = 1 LPA)
+    let formattedSalary = salary;
+    const digits = salary.match(/\d+/g);
+    if (digits && digits.length > 0) {
+      if (digits.length === 1) {
+        const num = parseInt(digits[0], 10);
+        formattedSalary = num >= 1000 ? `₹${Math.round(num / 100000)} LPA` : `₹${num} LPA`;
+      } else if (digits.length >= 2) {
+        const min = parseInt(digits[0], 10);
+        const max = parseInt(digits[1], 10);
+        const parsedMin = min >= 1000 ? Math.round(min / 100000) : min;
+        const parsedMax = max >= 1000 ? Math.round(max / 100000) : max;
+        formattedSalary = `₹${parsedMin} - ₹${parsedMax} LPA`;
+      }
+    }
+
     try {
       await postJob({
         title,
         company,
         description,
         location,
-        salary,
+        salary: formattedSalary,
         type,
         remote,
         experience,
@@ -391,21 +407,21 @@ const RecruiterDashboard = () => {
                       required
                       value={location}
                       onChange={(e) => setLocation(e.target.value)}
-                      placeholder="SF, CA or Remote"
+                      placeholder="Banglore,Delhi"
                       className="w-full pl-8 pr-3 py-2.5 rounded-xl border border-white/10 bg-slate-950/40 text-slate-200 text-xs focus:border-indigo-500 focus:outline-none transition-colors"
                     />
                   </div>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase">Salary Package</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Salary (Rupees / LPA)</label>
                   <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-bold font-sans">₹</span>
                     <input
                       type="text"
                       required
                       value={salary}
                       onChange={(e) => setSalary(e.target.value)}
-                      placeholder="e.g. $120k - $150k"
+                      placeholder="e.g. ₹400000 - ₹600000"
                       className="w-full pl-8 pr-3 py-2.5 rounded-xl border border-white/10 bg-slate-950/40 text-slate-200 text-xs focus:border-indigo-500 focus:outline-none transition-colors"
                     />
                   </div>

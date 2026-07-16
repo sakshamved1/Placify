@@ -199,7 +199,7 @@ const JobPortal = () => {
             filteredJobs.map((job) => {
               const appStatus = getApplicationStatus(job._id);
               return (
-                <div key={job._id} className="glass-card p-6 rounded-2xl flex flex-col gap-4">
+                <div key={job._id} className="glass-card p-6 rounded-2xl flex flex-col gap-4 mt-20">
                   
                   {/* Top line details */}
                   <div className="flex justify-between items-start gap-4">

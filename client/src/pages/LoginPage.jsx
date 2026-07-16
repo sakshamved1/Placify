@@ -26,10 +26,12 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   // Sync isRegister state when URL query updates
   useEffect(() => {
     setIsRegister(searchParams.get("register") === "true");
+    setError(""); // Clear errors on toggle
   }, [searchParams]);
 
   // If already logged in, redirect to dashboard
@@ -41,6 +43,31 @@ const LoginPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+
+    if (isRegister) {
+      // 1. Email format check
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        setError("Please enter a valid email address (e.g. name@gmail.com).");
+        return;
+      }
+
+      // 2. Password length check
+      if (password.length < 8) {
+        setError("Password must be at least 8 characters long.");
+        return;
+      }
+
+      // 3. Password character checks
+      const hasNum = /\d/.test(password);
+      const hasSpecial = /[!@#$%^&*(),.?":{}|<>_]/.test(password);
+      if (!hasNum || !hasSpecial) {
+        setError("Password must contain at least one number and one special character (e.g., @, #, $, _).");
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       if (isRegister) {
@@ -51,6 +78,7 @@ const LoginPage = () => {
       navigate("/dashboard");
     } catch (err) {
       console.error(err);
+      setError(err.response?.data?.message || err.message || "An error occurred during authentication.");
     } finally {
       setLoading(false);
     }
@@ -132,6 +160,12 @@ const LoginPage = () => {
                 : "Sign in to access your placement dashboard"}
             </p>
           </div>
+
+          {error && (
+            <div className="mb-6 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-semibold text-left animate-in fade-in duration-200">
+              {error}
+            </div>
+          )}
 
           {/* Autofill Demo Credentials */}
           {!isRegister && (
@@ -308,28 +342,9 @@ const LoginPage = () => {
             </button>
           </form>
 
-          {/* Social Sign-In buttons */}
-          <div className="relative my-6 text-center">
-            <hr className="border-white/5" />
-            <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 px-3 bg-[#0b0f19] text-[9px] font-bold text-slate-500 uppercase tracking-widest">
-              or continue with
-            </span>
-          </div>
+          
 
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              className="py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-slate-300 font-medium text-xs flex justify-center items-center gap-2 transition-all"
-            >
-              Google
-            </button>
-            <button
-              type="button"
-              className="py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-slate-300 font-medium text-xs flex justify-center items-center gap-2 transition-all"
-            >
-              GitHub
-            </button>
-          </div>
+          
 
           {/* Switch Mode */}
           <div className="mt-8 text-center text-xs text-slate-400">

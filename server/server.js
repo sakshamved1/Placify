@@ -15,6 +15,7 @@ import aiRoutes from './routes/ai.js';
 // Models for Seeding
 import User from './models/User.js';
 import Job from './models/Job.js';
+import Application from './models/Application.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -114,7 +115,9 @@ const seedDB = async () => {
     const jobCount = await Job.countDocuments();
     if (jobCount < 50 && recruiterId) {
       console.log('Fewer than 50 jobs found. Clearing mock listings and seeding live Indian IT jobs...');
-      await Job.deleteMany({});
+      // Preserve jobs that have active applications to maintain database relationships
+      const activeJobIds = await Application.distinct('job');
+      await Job.deleteMany({ _id: { $nin: activeJobIds } });
 
       // 2. Fetch Live Indian IT Developer Jobs from Adzuna API
       const adzunaId = process.env.ADZUNA_APP_ID;
@@ -419,6 +422,21 @@ const seedDB = async () => {
         ]);
         console.log('Sample fallback Indian IT jobs seeded successfully.');
       }
+    }
+
+    // Clean up orphaned applications whose job reference no longer exists in the database
+    const currentJobs = await Job.find({}, '_id');
+    const validJobIds = currentJobs.map(j => j._id.toString());
+    const dbApps = await Application.find({});
+    let deletedCount = 0;
+    for (const app of dbApps) {
+      if (app.job && !validJobIds.includes(app.job.toString())) {
+        await Application.findByIdAndDelete(app._id);
+        deletedCount++;
+      }
+    }
+    if (deletedCount > 0) {
+      console.log(`Cleaned up ${deletedCount} legacy orphaned applications to keep database consistent.`);
     }
   } catch (error) {
     console.error('Error seeding database:', error);

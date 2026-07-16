@@ -56,24 +56,37 @@ const Navbar = () => {
       <div className="glass-panel rounded-2xl border-white/10 px-6 py-3 flex items-center justify-between shadow-lg">
         
         {/* Logo */}
-        <Link to="/" className="flex items-center group">
           <span 
             className="font-heading font-extrabold text-xl tracking-tight transition-all duration-300 hover:opacity-90"
             style={{ color: '#B985FC' }}
           >
             Placify
           </span>
-        </Link>
 
         {/* Desktop Navigation Links */}
         <div className="hidden md:flex items-center gap-4 mx-10">
           {links.map((link) => {
             const isActive = location.pathname === link.path;
             const Icon = link.icon;
+            const isHashLink = link.path.startsWith('/#');
             return (
               <Link
                 key={link.path}
                 to={link.path}
+                onClick={(e) => {
+                  if (isHashLink) {
+                    e.preventDefault();
+                    const targetId = link.path.substring(2);
+                    if (location.pathname === '/') {
+                      document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth' });
+                    } else {
+                      navigate('/');
+                      setTimeout(() => {
+                        document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth' });
+                      }, 150);
+                    }
+                  }
+                }}
                 className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-all duration-300 flex items-center gap-1.5 border ${
                   isActive
                     ? 'bg-indigo-500/10 border-indigo-500/25 text-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.05)]'
@@ -196,16 +209,33 @@ const Navbar = () => {
       {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
         <div className="md:hidden mt-2 p-4 glass-panel border-white/10 rounded-2xl flex flex-col gap-2 shadow-xl animate-in fade-in slide-in-from-top-2 duration-200">
-          {links.map((link) => (
-            <Link
-              key={link.path}
-              to={link.path}
-              onClick={() => setMobileMenuOpen(false)}
-              className="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:text-white hover:bg-white/5 transition-all"
-            >
-              {link.label}
-            </Link>
-          ))}
+          {links.map((link) => {
+            const isHashLink = link.path.startsWith('/#');
+            return (
+              <Link
+                key={link.path}
+                to={link.path}
+                onClick={(e) => {
+                  setMobileMenuOpen(false);
+                  if (isHashLink) {
+                    e.preventDefault();
+                    const targetId = link.path.substring(2);
+                    if (location.pathname === '/') {
+                      document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth' });
+                    } else {
+                      navigate('/');
+                      setTimeout(() => {
+                        document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth' });
+                      }, 150);
+                    }
+                  }
+                }}
+                className="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:text-white hover:bg-white/5 transition-all"
+              >
+                {link.label}
+              </Link>
+            );
+          })}
           {user ? (
             <div className="border-t border-white/5 pt-3 mt-1 flex flex-col gap-2">
               <div className="px-4 py-2 flex flex-col">

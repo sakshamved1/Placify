@@ -65,11 +65,15 @@ const AIInterviewCoach = () => {
             className="w-full px-3 py-2.5 rounded-xl border border-white/10 bg-slate-950/40 text-slate-200 text-xs focus:border-indigo-500 focus:outline-none"
           >
             <option value="">-- Choose Position --</option>
-            {activeApplications.map((app) => (
-              <option key={app._id} value={app.job?._id || app.job}>
-                {app.job?.title} at {app.job?.company}
-              </option>
-            ))}
+            {activeApplications.map((app) => {
+              const titleStr = app.job?.title || 'Unknown Position';
+              const companyStr = app.job?.company || 'Corporate Partner';
+              return (
+                <option key={app._id} value={app.job?._id || app.job || app._id}>
+                  {titleStr} at {companyStr}
+                </option>
+              );
+            })}
           </select>
         </div>
         <button
