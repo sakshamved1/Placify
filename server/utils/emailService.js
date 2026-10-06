@@ -1,29 +1,114 @@
 import nodemailer from 'nodemailer';
 
-// Create transporter using Brevo SMTP or fallback
-const createTransporter = () => {
+// Helper to send email via Brevo HTTPS REST API (Port 443 - never blocked by cloud firewalls)
+const sendViaBrevoApi = async ({ to, subject, html, apiKey, fromEmail, fromName }) => {
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'accept': 'application/json',
+      'api-key': apiKey,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { name: fromName, email: fromEmail },
+      to: [{ email: to }],
+      subject: subject,
+      htmlContent: html,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.message || `Brevo API error: ${response.status}`);
+  }
+  return data;
+};
+
+// Create transporter using Brevo SMTP with multi-port cloud resilience (2525, 587, 465)
+const createTransporter = (customPort) => {
   const host = process.env.BREVO_SMTP_HOST || 'smtp-relay.brevo.com';
-  const port = parseInt(process.env.BREVO_SMTP_PORT || '587', 10);
+  // Use port 2525 by default on cloud instances because port 587 is frequently throttled/blocked
+  const port = parseInt(customPort || process.env.BREVO_SMTP_PORT || '2525', 10);
   const user = process.env.BREVO_SMTP_USER;
   const pass = process.env.BREVO_SMTP_PASS;
 
   if (!user || !pass) {
-    console.warn('⚠️ Brevo SMTP credentials not found in environment (BREVO_SMTP_USER / BREVO_SMTP_PASS).');
     return null;
   }
 
   return nodemailer.createTransport({
     host,
     port,
-    secure: port === 465, // true for 465, false for 587
+    secure: port === 465,
     auth: {
       user,
       pass,
     },
-    connectionTimeout: 8000,
-    greetingTimeout: 8000,
-    socketTimeout: 8000,
+    connectionTimeout: 7000,
+    greetingTimeout: 7000,
+    socketTimeout: 7000,
   });
+};
+
+// Universal Email Dispatcher (Attempts HTTPS API -> SMTP Port 2525 -> SMTP Port 587)
+const dispatchEmail = async ({ to, subject, html }) => {
+  const fromEmail = process.env.BREVO_FROM_EMAIL || 'sakshamved111@gmail.com';
+  const fromName = process.env.BREVO_FROM_NAME || 'Placify';
+  const apiKey = process.env.BREVO_API_KEY || (process.env.BREVO_SMTP_PASS?.startsWith('xkeysib-') ? process.env.BREVO_SMTP_PASS : null);
+
+  // 1. If Brevo API Key is present, use HTTPS Port 443 (Fastest & 100% cloud-safe)
+  if (apiKey) {
+    try {
+      const res = await sendViaBrevoApi({ to, subject, html, apiKey, fromEmail, fromName });
+      console.log(`✅ [HTTPS API] Email sent to ${to} (MessageId: ${res.messageId})`);
+      return res;
+    } catch (apiErr) {
+      console.warn('Brevo HTTPS API failed, falling back to SMTP:', apiErr.message);
+    }
+  }
+
+  // 2. Try SMTP on primary port (default 2525 for Render cloud compatibility)
+  const primaryPort = process.env.BREVO_SMTP_PORT || '2525';
+  let transporter = createTransporter(primaryPort);
+
+  if (!transporter) {
+    console.log('\n=========================================');
+    console.log('📧 [DEV EMAIL SIMULATION - Brevo credentials missing in .env]');
+    console.log(`To: ${to}`);
+    console.log(`Subject: ${subject}`);
+    console.log('=========================================\n');
+    return { simulated: true };
+  }
+
+  try {
+    const info = await transporter.sendMail({
+      from: `"${fromName}" <${fromEmail}>`,
+      to,
+      subject,
+      html,
+    });
+    console.log(`✅ [SMTP :${primaryPort}] Email sent to ${to} (MessageId: ${info.messageId})`);
+    return info;
+  } catch (err1) {
+    console.warn(`⚠️ SMTP port ${primaryPort} timed out or failed (${err1.message}). Retrying on alternative port...`);
+    
+    // 3. Fallback to alternative port (if 2525 failed, try 587; if 587 failed, try 2525)
+    const fallbackPort = primaryPort === '2525' ? '587' : '2525';
+    try {
+      const fallbackTransporter = createTransporter(fallbackPort);
+      const info2 = await fallbackTransporter.sendMail({
+        from: `"${fromName}" <${fromEmail}>`,
+        to,
+        subject,
+        html,
+      });
+      console.log(`✅ [SMTP :${fallbackPort} Fallback] Email sent to ${to} (MessageId: ${info2.messageId})`);
+      return info2;
+    } catch (err2) {
+      console.error(`❌ Both SMTP ports (${primaryPort} & ${fallbackPort}) failed for ${to}:`, err2.message);
+      throw err2;
+    }
+  }
 };
 
 /**
@@ -31,10 +116,6 @@ const createTransporter = () => {
  * @param {Object} options { email, name, verificationUrl }
  */
 export const sendVerificationEmail = async ({ email, name, verificationUrl }) => {
-  const transporter = createTransporter();
-  const fromEmail = process.env.BREVO_FROM_EMAIL || 'noreply@placify.com';
-  const fromName = process.env.BREVO_FROM_NAME || 'Placify';
-
   const htmlContent = `
   <!DOCTYPE html>
   <html>
@@ -106,33 +187,12 @@ export const sendVerificationEmail = async ({ email, name, verificationUrl }) =>
   </html>
   `;
 
-  if (!transporter) {
-    console.log('\n=========================================');
-    console.log('📧 [DEV EMAIL SIMULATION - Brevo SMTP credentials not configured]');
-    console.log(`To: ${email}`);
-    console.log(`Subject: Verify your Placify Account`);
-    console.log(`Verification URL: ${verificationUrl}`);
-    console.log('=========================================\n');
-    return { simulated: true, verificationUrl };
-  }
-
-  const mailOptions = {
-    from: `"${fromName}" <${fromEmail}>`,
+  console.log(`🔗 Verification Link for ${email}: ${verificationUrl}`);
+  return await dispatchEmail({
     to: email,
     subject: 'Verify your Placify Account',
     html: htmlContent,
-  };
-
-  try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`✅ Verification email sent to ${email} (MessageId: ${info.messageId})`);
-    console.log(`🔗 Verification Link: ${verificationUrl}`);
-    return info;
-  } catch (error) {
-    console.error(`❌ Failed to send verification email via Brevo to ${email}:`, error.message);
-    console.log(`🔗 Verification Link fallback: ${verificationUrl}`);
-    throw error;
-  }
+  });
 };
 
 /**
@@ -140,10 +200,6 @@ export const sendVerificationEmail = async ({ email, name, verificationUrl }) =>
  * @param {Object} options { email, name, resetUrl }
  */
 export const sendPasswordResetEmail = async ({ email, name, resetUrl }) => {
-  const transporter = createTransporter();
-  const fromEmail = process.env.BREVO_FROM_EMAIL || 'noreply@placify.com';
-  const fromName = process.env.BREVO_FROM_NAME || 'Placify';
-
   const htmlContent = `
   <!DOCTYPE html>
   <html>
@@ -215,31 +271,10 @@ export const sendPasswordResetEmail = async ({ email, name, resetUrl }) => {
   </html>
   `;
 
-  if (!transporter) {
-    console.log('\n=========================================');
-    console.log('📧 [DEV EMAIL SIMULATION - Brevo SMTP not configured]');
-    console.log(`To: ${email}`);
-    console.log(`Subject: Reset your Placify Password`);
-    console.log(`Reset URL: ${resetUrl}`);
-    console.log('=========================================\n');
-    return { simulated: true, resetUrl };
-  }
-
-  const mailOptions = {
-    from: `"${fromName}" <${fromEmail}>`,
+  console.log(`🔗 Password Reset Link for ${email}: ${resetUrl}`);
+  return await dispatchEmail({
     to: email,
     subject: 'Reset your Placify Password',
     html: htmlContent,
-  };
-
-  try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`✅ Password reset email sent to ${email} (MessageId: ${info.messageId})`);
-    console.log(`🔗 Reset Link: ${resetUrl}`);
-    return info;
-  } catch (error) {
-    console.error(`❌ Failed to send password reset email via Brevo to ${email}:`, error.message);
-    console.log(`🔗 Reset Link fallback: ${resetUrl}`);
-    throw error;
-  }
+  });
 };
