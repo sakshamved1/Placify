@@ -70,6 +70,11 @@ const generateToken = (id) => {
   });
 };
 
+// Helper to normalize Client URL without trailing slashes
+const getClientUrl = () => {
+  return (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/+$/, '');
+};
+
 // @desc    Register a new user & send verification link
 // @route   POST /api/auth/register
 // @access  Public
@@ -107,13 +112,16 @@ router.post('/register', async (req, res) => {
       const verificationToken = existingUser.getVerificationToken();
       await existingUser.save();
 
-      const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+      const clientUrl = getClientUrl();
       const verificationUrl = `${clientUrl}/verify-email?token=${verificationToken}&email=${encodeURIComponent(existingUser.email)}`;
 
-      await sendVerificationEmail({
+      // Send verification email in background without blocking response
+      sendVerificationEmail({
         email: existingUser.email,
         name: existingUser.name,
         verificationUrl,
+      }).catch((err) => {
+        console.error('Background email dispatch failed:', err.message);
       });
 
       return res.status(200).json({
@@ -134,13 +142,16 @@ router.post('/register', async (req, res) => {
     const verificationToken = user.getVerificationToken();
     await user.save();
 
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+    const clientUrl = getClientUrl();
     const verificationUrl = `${clientUrl}/verify-email?token=${verificationToken}&email=${encodeURIComponent(user.email)}`;
 
-    await sendVerificationEmail({
+    // Send verification email in background without blocking response
+    sendVerificationEmail({
       email: user.email,
       name: user.name,
       verificationUrl,
+    }).catch((err) => {
+      console.error('Background email dispatch failed:', err.message);
     });
 
     res.status(201).json({
@@ -240,13 +251,16 @@ router.post('/resend-verification', async (req, res) => {
     const verificationToken = user.getVerificationToken();
     await user.save({ validateBeforeSave: false });
 
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+    const clientUrl = getClientUrl();
     const verificationUrl = `${clientUrl}/verify-email?token=${verificationToken}&email=${encodeURIComponent(user.email)}`;
 
-    await sendVerificationEmail({
+    // Send in background without blocking response
+    sendVerificationEmail({
       email: user.email,
       name: user.name,
       verificationUrl,
+    }).catch((err) => {
+      console.error('Background resend email failed:', err.message);
     });
 
     res.status(200).json({
@@ -317,13 +331,16 @@ router.post('/forgot-password', async (req, res) => {
     const resetToken = user.getResetPasswordToken();
     await user.save({ validateBeforeSave: false });
 
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+    const clientUrl = getClientUrl();
     const resetUrl = `${clientUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
 
-    await sendPasswordResetEmail({
+    // Send in background without blocking response
+    sendPasswordResetEmail({
       email: user.email,
       name: user.name,
       resetUrl,
+    }).catch((err) => {
+      console.error('Background password reset email failed:', err.message);
     });
 
     res.status(200).json({
