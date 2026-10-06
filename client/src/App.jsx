@@ -4,6 +4,8 @@ import { AppProvider, useApp } from './context/AppContext';
 import Navbar from './components/Navbar';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import DashboardPage from './pages/DashboardPage';
 import JobPortal from './pages/JobPortal';
 import ResumeManagement from './pages/ResumeManagement';
@@ -44,6 +46,9 @@ const App = () => {
               {/* Public Routes */}
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/verify-email" element={<VerifyEmailPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/forgot-password" element={<Navigate to="/login?forgot=true" replace />} />
 
               {/* Protected User Dashboard */}
               <Route

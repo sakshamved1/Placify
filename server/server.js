@@ -70,6 +70,12 @@ io.on('connection', (socket) => {
 // Seed Initial Database Data
 const seedDB = async () => {
   try {
+    // Ensure demo accounts are verified
+    await User.updateMany(
+      { email: { $in: ['student@placify.com', 'recruiter@placify.com', 'admin@placify.com'] } },
+      { $set: { isVerified: true } }
+    );
+
     const userCount = await User.countDocuments();
     let recruiterId;
 
@@ -82,6 +88,7 @@ const seedDB = async () => {
         email: 'student@placify.com',
         password: 'password123',
         role: 'student',
+        isVerified: true,
         profile: {
           phone: '+1 234 567 8900',
           department: 'Computer Science',
@@ -96,6 +103,7 @@ const seedDB = async () => {
         email: 'recruiter@placify.com',
         password: 'password123',
         role: 'recruiter',
+        isVerified: true,
       });
 
       const admin = await User.create({
@@ -103,6 +111,7 @@ const seedDB = async () => {
         email: 'admin@placify.com',
         password: 'password123',
         role: 'admin',
+        isVerified: true,
       });
 
       recruiterId = recruiter._id;

@@ -2,7 +2,7 @@ import React, { createContext, useState, useEffect, useContext } from 'react';
 import io from 'socket.io-client';
 
 
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const AppContext = createContext();
 
@@ -97,12 +97,76 @@ export const AppProvider = ({ children }) => {
         method: 'POST',
         body: JSON.stringify({ name, email, password, role }),
       });
-      localStorage.setItem('token', data.token);
-      setToken(data.token);
-      showToast('Registered', 'Account created successfully!', 'success');
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        setToken(data.token);
+      }
+      showToast('Registration Notice', data.message || 'Please check your email for the verification link.', 'info');
       return data;
     } catch (err) {
       showToast('Registration Failed', err.message, 'error');
+      throw err;
+    }
+  };
+
+  // Verify Email Link
+  const verifyEmail = async (verifyToken, email) => {
+    try {
+      const data = await apiFetch(`/api/auth/verify-email?token=${encodeURIComponent(verifyToken)}&email=${encodeURIComponent(email)}`);
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        setToken(data.token);
+        setUser(data);
+      }
+      showToast('Verified!', data.message || 'Your email has been verified.', 'success');
+      return data;
+    } catch (err) {
+      showToast('Verification Failed', err.message, 'error');
+      throw err;
+    }
+  };
+
+  // Resend Verification Email
+  const resendVerification = async (email) => {
+    try {
+      const data = await apiFetch('/api/auth/resend-verification', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      });
+      showToast('Link Sent', data.message || 'Verification link sent to your inbox.', 'success');
+      return data;
+    } catch (err) {
+      showToast('Resend Failed', err.message, 'error');
+      throw err;
+    }
+  };
+
+  // Forgot Password Request
+  const forgotPassword = async (email) => {
+    try {
+      const data = await apiFetch('/api/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      });
+      showToast('Reset Link Sent', data.message || 'Password reset link sent to your email.', 'success');
+      return data;
+    } catch (err) {
+      showToast('Request Failed', err.message, 'error');
+      throw err;
+    }
+  };
+
+  // Reset Password Action
+  const resetPassword = async (resetToken, email, password) => {
+    try {
+      const data = await apiFetch('/api/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ token: resetToken, email, password }),
+      });
+      showToast('Password Reset', data.message || 'Your password has been reset successfully.', 'success');
+      return data;
+    } catch (err) {
+      showToast('Reset Failed', err.message, 'error');
       throw err;
     }
   };
@@ -407,6 +471,10 @@ export const AppProvider = ({ children }) => {
         toasts,
         login,
         register,
+        verifyEmail,
+        resendVerification,
+        forgotPassword,
+        resetPassword,
         logout,
         updateProfile,
         uploadResume,

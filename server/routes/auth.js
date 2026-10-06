@@ -4,9 +4,11 @@ import bcrypt from 'bcryptjs';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { v2 as cloudinary } from 'cloudinary';
 import User from '../models/User.js';
 import { protect, authorize } from '../middleware/auth.js';
+import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/emailService.js';
 
 const router = express.Router();
 
@@ -68,7 +70,7 @@ const generateToken = (id) => {
   });
 };
 
-// @desc    Register a new user
+// @desc    Register a new user & send verification link
 // @route   POST /api/auth/register
 // @access  Public
 router.post('/register', async (req, res) => {
@@ -91,59 +93,298 @@ router.post('/register', async (req, res) => {
   }
 
   try {
-    const userExists = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
 
-    if (userExists) {
-      return res.status(400).json({ message: 'User already exists with this email' });
+    if (existingUser) {
+      if (existingUser.isVerified) {
+        return res.status(400).json({ message: 'An account with this email already exists. Please log in.' });
+      }
+
+      // If user signed up previously but never verified, update info and resend verification link
+      existingUser.name = name || existingUser.name;
+      existingUser.password = password; // Will be hashed by pre-save
+      existingUser.role = role || existingUser.role;
+      const verificationToken = existingUser.getVerificationToken();
+      await existingUser.save();
+
+      const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+      const verificationUrl = `${clientUrl}/verify-email?token=${verificationToken}&email=${encodeURIComponent(existingUser.email)}`;
+
+      await sendVerificationEmail({
+        email: existingUser.email,
+        name: existingUser.name,
+        verificationUrl,
+      });
+
+      return res.status(200).json({
+        message: 'A fresh verification link has been sent to your email. Please verify your account to continue.',
+        email: existingUser.email,
+        requiresVerification: true,
+      });
     }
 
-    const user = await User.create({
+    const user = new User({
       name,
-      email,
+      email: email.toLowerCase(),
       password,
       role: role || 'student',
+      isVerified: false,
     });
 
-    if (user) {
-      res.status(201).json({
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        token: generateToken(user._id),
-      });
-    } else {
-      res.status(400).json({ message: 'Invalid user data provided' });
-    }
+    const verificationToken = user.getVerificationToken();
+    await user.save();
+
+    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+    const verificationUrl = `${clientUrl}/verify-email?token=${verificationToken}&email=${encodeURIComponent(user.email)}`;
+
+    await sendVerificationEmail({
+      email: user.email,
+      name: user.name,
+      verificationUrl,
+    });
+
+    res.status(201).json({
+      message: 'Registration successful! We sent a verification link to your email. Please click the link to activate your account.',
+      email: user.email,
+      requiresVerification: true,
+    });
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: error.message || 'Server error during registration' });
   }
 });
 
-// @desc    Auth user & get token
+// @desc    Verify email address using link token
+// @route   GET /api/auth/verify-email or POST /api/auth/verify-email
+// @access  Public
+const handleVerifyEmail = async (req, res) => {
+  const token = req.query.token || req.body.token;
+  const email = req.query.email || req.body.email;
+
+  if (!token || !email) {
+    return res.status(400).json({ message: 'Missing verification token or email address.' });
+  }
+
+  try {
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await User.findOne({
+      email: email.toLowerCase(),
+      verificationToken: hashedToken,
+      verificationTokenExpire: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      // Check if user is already verified
+      const alreadyVerifiedUser = await User.findOne({ email: email.toLowerCase() });
+      if (alreadyVerifiedUser && alreadyVerifiedUser.isVerified) {
+        return res.status(200).json({
+          _id: alreadyVerifiedUser._id,
+          name: alreadyVerifiedUser.name,
+          email: alreadyVerifiedUser.email,
+          role: alreadyVerifiedUser.role,
+          token: generateToken(alreadyVerifiedUser._id),
+          message: 'Your email has already been verified. You are now logged in!',
+        });
+      }
+
+      return res.status(400).json({
+        message: 'Invalid or expired verification link. Please request a new verification link.',
+      });
+    }
+
+    // Mark user as verified
+    user.isVerified = true;
+    user.verificationToken = undefined;
+    user.verificationTokenExpire = undefined;
+    await user.save({ validateBeforeSave: false });
+
+    res.status(200).json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      token: generateToken(user._id),
+      message: 'Email successfully verified! Welcome to Placify.',
+    });
+  } catch (error) {
+    console.error('Verification error:', error);
+    res.status(500).json({ message: error.message || 'Server error during email verification' });
+  }
+};
+
+router.get('/verify-email', handleVerifyEmail);
+router.post('/verify-email', handleVerifyEmail);
+
+// @desc    Resend verification email
+// @route   POST /api/auth/resend-verification
+// @access  Public
+router.post('/resend-verification', async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ message: 'Please provide an email address' });
+  }
+
+  try {
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user) {
+      return res.status(404).json({ message: 'No account found with this email address.' });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({ message: 'This email is already verified. You can log in directly.' });
+    }
+
+    const verificationToken = user.getVerificationToken();
+    await user.save({ validateBeforeSave: false });
+
+    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+    const verificationUrl = `${clientUrl}/verify-email?token=${verificationToken}&email=${encodeURIComponent(user.email)}`;
+
+    await sendVerificationEmail({
+      email: user.email,
+      name: user.name,
+      verificationUrl,
+    });
+
+    res.status(200).json({
+      message: 'A fresh verification link has been sent to your email. Please check your inbox.',
+    });
+  } catch (error) {
+    console.error('Resend verification error:', error);
+    res.status(500).json({ message: error.message || 'Server error while sending verification email' });
+  }
+});
+
+// @desc    Auth user & get token (Requires verified email)
 // @route   POST /api/auth/login
 // @access  Public
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
-  try {
-    const user = await User.findOne({ email });
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Please provide both email and password' });
+  }
 
-    if (user && (await user.matchPassword(password))) {
-      res.json({
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        token: generateToken(user._id),
-      });
-    } else {
-      res.status(401).json({ message: 'Invalid email or password' });
+  try {
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user || !(await user.matchPassword(password))) {
+      return res.status(401).json({ message: 'Invalid email or password' });
     }
+
+    // Check email verification
+    if (!user.isVerified) {
+      return res.status(403).json({
+        message: 'Your email has not been verified yet. Please check your inbox or click below to resend the link.',
+        isUnverified: true,
+        email: user.email,
+      });
+    }
+
+    res.json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      token: generateToken(user._id),
+    });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: error.message });
+  }
+});
+
+// @desc    Forgot Password - Send reset link to email
+// @route   POST /api/auth/forgot-password
+// @access  Public
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ message: 'Please provide your email address' });
+  }
+
+  try {
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user) {
+      return res.status(404).json({ message: 'No account found with this email address.' });
+    }
+
+    const resetToken = user.getResetPasswordToken();
+    await user.save({ validateBeforeSave: false });
+
+    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+    const resetUrl = `${clientUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
+
+    await sendPasswordResetEmail({
+      email: user.email,
+      name: user.name,
+      resetUrl,
+    });
+
+    res.status(200).json({
+      message: 'Password reset link sent! Please check your email inbox.',
+    });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ message: error.message || 'Server error processing password reset' });
+  }
+});
+
+// @desc    Reset Password using token from link
+// @route   POST /api/auth/reset-password
+// @access  Public
+router.post('/reset-password', async (req, res) => {
+  const { token, email, password } = req.body;
+
+  if (!token || !email || !password) {
+    return res.status(400).json({ message: 'Please provide reset token, email, and new password.' });
+  }
+
+  // Validate password strength
+  if (password.length < 8) {
+    return res.status(400).json({ message: 'Password must be at least 8 characters long' });
+  }
+  const hasNum = /\d/.test(password);
+  const hasSpecial = /[!@#$%^&*(),.?":{}|<>_]/.test(password);
+  if (!hasNum || !hasSpecial) {
+    return res.status(400).json({ message: 'Password must contain at least one number and one special character' });
+  }
+
+  try {
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await User.findOne({
+      email: email.toLowerCase(),
+      resetPasswordToken: hashedToken,
+      resetPasswordExpire: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        message: 'Invalid or expired password reset link. Please request a new one.',
+      });
+    }
+
+    // Set new password
+    user.password = password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    // Auto-verify if they reset via email link
+    user.isVerified = true;
+
+    await user.save();
+
+    res.status(200).json({
+      message: 'Password reset successfully! You can now log in with your new password.',
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ message: error.message || 'Server error resetting password' });
   }
 });
 
